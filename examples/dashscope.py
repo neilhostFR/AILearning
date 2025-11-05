@@ -1,7 +1,5 @@
 import os
 from openai import OpenAI
-# print("apiKey",os.environ.get("DEEPSEEK_API_KEY"))
-print("apikey",os.getenv("DASHSCOPE_API_KEY"))
 client=OpenAI(api_key=os.getenv("DASHSCOPE_API_KEY"),base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 response=client.chat.completions.create(
 	model="qwen-flash",

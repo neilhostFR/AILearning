@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video RAG System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: 0 auto; 
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+        .chat-box { 
+            flex: 1;
+            border: 1px solid #ccc; 
+            height: 400px; 
+            overflow-y: scroll; 
+            padding: 15px; 
+            margin-bottom: 20px;
+            background-color: #fafafa;
+        }
+        .message {
+            margin-bottom: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 80%;
+        }
+        .user-message {
+            background-color: #dcf8c6;
+            margin-left: auto;
+            text-align: right;
+        }
+        .system-message {
+            background-color: #ffffff;
+            margin-right: auto;
+            border: 1px solid #eee;
+        }
+        .input-container {
+            display: flex;
+            gap: 10px;
+        }
+        .input-box { 
+            flex: 1;
+            padding: 12px; 
+            border: 1px solid #ccc;
+            border-radius: 20px;
+            font-size: 16px;
+        }
+        .send-btn { 
+            padding: 12px 24px; 
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .send-btn:hover {
+            background-color: #45a049;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        h2 {
+            color: #555;
+        }
+        a {
+            color: #1a73e8;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                padding: 15px;
+            }
+            .chat-box {
+                height: 300px;
+            }
+            .input-box {
+                padding: 10px;
+                font-size: 14px;
+            }
+            .send-btn {
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Video RAG System</h1>
+        
+        <div class="chat-container">
+            <div class="chat-box" id="chatBox">
+                <div class="message system-message">
+                    <p><strong>系统:</strong> 欢迎使用Video RAG系统！请输入您的问题。</p>
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <input type="text" class="input-box" id="userInput" placeholder="请输入您的问题...">
+                <button class="send-btn" onclick="sendMessage()">发送</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 发送用户查询
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const chatBox = document.getElementById('chatBox');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // 显示用户消息
+            const userMessageDiv = document.createElement('div');
+            userMessageDiv.className = 'message user-message';
+            userMessageDiv.innerHTML = `<p><strong>您:</strong> ${message}</p>`;
+            chatBox.appendChild(userMessageDiv);
+            
+            input.value = '';
+            
+            // 创建系统回复消息容器
+            const systemMessageDiv = document.createElement('div');
+            systemMessageDiv.className = 'message system-message';
+            const systemContent = document.createElement('p');
+            systemContent.innerHTML = '<strong>系统:</strong> ';
+            systemMessageDiv.appendChild(systemContent);
+            chatBox.appendChild(systemMessageDiv);
+            
+            // 滚动到底部
+            chatBox.scrollTop = chatBox.scrollHeight;
+            
+            // 使用流式输出
+            try {
+                const response = await fetch('/query-stream', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({query: message})
+                });
+                
+                if (!response.body) {
+                    throw new Error('ReadableStream not supported');
+                }
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedContent = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value, { stream: true });
+                    accumulatedContent += chunk;
+                    
+                    // 解析SSE格式的数据 (data: ...)
+                    const lines = accumulatedContent.split('\n');
+                    let processedContent = '';
+                    
+                    for (let i = 0; i < lines.length; i++) {
+                        const line = lines[i];
+                        if (line.startsWith('data: ')) {
+                            processedContent += line.substring(6); // 移除 'data: ' 前缀
+                        } else if (line.trim() === '') {
+                            // 空行表示一个消息的结束
+                            continue;
+                        }
+                    }
+                    
+                    // 转换Markdown链接为HTML链接
+                    const formattedContent = processedContent.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+                    
+                    // 更新系统回复
+                    systemContent.innerHTML = `<strong>系统:</strong> ${formattedContent}`;
+                    
+                    // 滚动到底部
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                systemContent.innerHTML = '<strong>系统:</strong> 抱歉，处理您的请求时出现错误。';
+            }
+        }
+        
+        // 回车发送消息
+        document.getElementById('userInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
