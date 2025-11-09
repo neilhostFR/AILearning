@@ -529,7 +529,7 @@ if __name__ == "__main__":
     processor = PDFMultiModalProcessor()
     
     # 处理PDF
-    result = processor.process_pdf("./source/llm.pdf")
+    result = processor.process_pdf("./source/产品介绍.pdf")
     
     if result['status'] == 'success':
         print(f"处理成功: {result['statistics']}")
