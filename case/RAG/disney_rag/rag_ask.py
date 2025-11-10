@@ -1,6 +1,5 @@
 import os
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
-from openai import OpenAI
 from build_knowledge_base import BuildKnowledge
 from transformers import CLIPProcessor,CLIPModel
 import torch
