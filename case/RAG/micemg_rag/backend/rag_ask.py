@@ -4,6 +4,9 @@ from langchain_classic.chains import RetrievalQA, ConversationalRetrievalChain
 from langchain_classic.memory import ConversationBufferMemory
 from langchain_ollama import OllamaLLM
 from knowledge_base import BulidKnowledge
+from langchain_community.retrievers import ContextualCompressionRetriever
+from langchain_community.document_compressors import CrossEncoderReranker
+from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 
 def initialize_rag_system():
 	"""初始化RAG系统"""
@@ -16,9 +19,21 @@ def initialize_rag_system():
 
 	# 使用ConversationBufferMemory来管理对话历史
 	memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True, output_key="answer")
+	# 创建基础检索器
+	base_retriever = knowledge.vectordb.as_retriever(search_kwargs={"k": 10})
+	
+	# 创建重排序器
+	compressor = CrossEncoderReranker(model=HuggingFaceCrossEncoder(model_name="BAAI/bge-reranker-v2-m3"), top_n=1)
+	
+	# 创建带重排序的检索器
+	retriever = ContextualCompressionRetriever(
+		base_compressor=compressor, 
+		base_retriever=base_retriever
+	)
+	
 	qa=ConversationalRetrievalChain.from_llm(
 		llm=ollama_llm, 
-		retriever=knowledge.vectordb.as_retriever(search_kwargs={"k": 3}), # 返回更多相关文档
+		retriever=retriever,
 		return_source_documents=True,
 		memory=memory
 	)
